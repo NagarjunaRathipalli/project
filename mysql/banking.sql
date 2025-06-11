@@ -1,14 +1,8 @@
-CREATE TABLE withdrawals (
-    withdrawal_id SERIAL PRIMARY KEY,
-    account_id INT NOT NULL,
-    amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
-    withdrawal_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    method VARCHAR(50), 
-    status VARCHAR(20) DEFAULT 'pending',
-    reference_note TEXT,
-
-    CONSTRAINT fk_account
-        FOREIGN KEY (account_id)
-        REFERENCES accounts(account_id)
-        ON DELETE CASCADE
+CREATE TABLE customers (
+    customer_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE,
+    phone VARCHAR(20),
+    address TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
