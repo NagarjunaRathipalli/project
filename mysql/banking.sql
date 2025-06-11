@@ -4,7 +4,7 @@ CREATE TABLE withdrawals (
     amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
     withdrawal_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     method VARCHAR(50), 
-    status VARCHAR(20) DEFAULT 
+    status VARCHAR(20) DEFAULT 'pending',
     reference_note TEXT,
 
     CONSTRAINT fk_account
