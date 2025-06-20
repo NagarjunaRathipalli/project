@@ -1,245 +1,207 @@
 import tkinter as tk
 from tkinter import messagebox, simpledialog
-import sqlite3
+import mysql.connector
 from datetime import datetime
 
-conn = sqlite3.connect("bank.db")
+conn = mysql.connector.connect(
+    host="localhost",
+    user="root",
+    password="student",  
+    database="bankdb"
+)
 c = conn.cursor()
 
-c.execute('''CREATE TABLE IF NOT EXISTS users (
-    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    pin TEXT,
-    balance REAL DEFAULT 0.0
-)''')
-
-c.execute('''CREATE TABLE IF NOT EXISTS transactions (
-    transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    date TEXT,
-    amount REAL,
-    type TEXT,
-    FOREIGN KEY(user_id) REFERENCES users(user_id)
-)''')
-
-c.execute('''CREATE TABLE IF NOT EXISTS admins (
-    admin_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT,
-    password TEXT
-)''')
-
-c.execute("SELECT * FROM admins WHERE username='admin'")
-if not c.fetchone():
-    c.execute("INSERT INTO admins (username, password) VALUES (?, ?)", ("admin", "admin123"))
-
-conn.commit()
-
-def draw_gradient(canvas, color1, color2):
-    width = canvas.winfo_width()
-    height = canvas.winfo_height()
-    canvas.delete("gradient")
-
-    r1, g1, b1 = canvas.winfo_rgb(color1)
-    r2, g2, b2 = canvas.winfo_rgb(color2)
-
-    r_ratio = (r2 - r1) / width
-    g_ratio = (g2 - g1) / width
-    b_ratio = (b2 - b1) / width
-
-    for i in range(width):
-        nr = int(r1 + (r_ratio * i))
-        ng = int(g1 + (g_ratio * i))
-        nb = int(b1 + (b_ratio * i))
-        color = f'#{nr//256:02x}{ng//256:02x}{nb//256:02x}'
-        canvas.create_line(i, 0, i, height, tags=("gradient",), fill=color)
-
 class BankingApp:
-    def _init_(self, root):
+    def __init__(self, root):
         self.root = root
-        self.root.title("Banking Application")
+        self.root.title("Banking System")
         self.root.geometry("500x400")
         self.current_user_id = None
-        self.canvas = tk.Canvas(self.root, highlightthickness=0)
-        self.canvas.pack(fill="both", expand=True)
-        self.canvas.bind("<Configure>", lambda e: draw_gradient(self.canvas, "#2c3e50", "#4ca1af"))
-
-        self.frame = tk.Frame(self.canvas, bg="#2c3e50")
-        self.canvas.create_window((0, 0), window=self.frame, anchor="nw")
-
+        self.colors = {
+            "main": "#2c3e50",
+            "register": "#4ca1af",
+            "user_login": "#2fb86e",
+            "user_dashboard": "#854cb1",
+            "admin_login": "#5bbfe9",
+            "admin_dashboard": "#f4ab52"
+        }
         self.main_menu()
 
-    def clear_frame(self):
-        for widget in self.frame.winfo_children():
+    def clear_frame(self, color):
+        for widget in self.root.winfo_children():
             widget.destroy()
+        self.root.configure(bg=color)
 
     def main_menu(self):
-        self.clear_frame()
-        tk.Label(self.frame, text="Banking System", font=("Arial", 20), fg="white", bg="#2c3e50").pack(pady=20)
-        tk.Button(self.frame, text="User Login", command=self.user_login, bg="white", fg="#2c3e50", width=20).pack(pady=5)
-        tk.Button(self.frame, text="Register", command=self.register_user, bg="white", fg="#2c3e50", width=20).pack(pady=5)
-        tk.Button(self.frame, text="Admin Login", command=self.admin_login, bg="white", fg="#2c3e50", width=20).pack(pady=5)
+        self.clear_frame(self.colors["main"])
+        tk.Label(self.root, text="Banking System", font=("Arial", 20), bg=self.colors["main"], fg="white").pack(pady=20)
+        tk.Button(self.root, text="User Login", command=self.user_login, width=20).pack(pady=5)
+        tk.Button(self.root, text="Register", command=self.register_user, width=20).pack(pady=5)
+        tk.Button(self.root, text="Admin Login", command=self.admin_login, width=20).pack(pady=5)
 
-    def register_user(self):
-        self.clear_frame()
-        tk.Label(self.frame, text="Register", font=("Arial", 18), fg="white", bg="#2c3e50").pack(pady=10)
+    def register_user(self, return_to_admin=False):
+        self.clear_frame(self.colors["register"])
+        tk.Label(self.root, text="Register", font=("Arial", 18), bg=self.colors["register"], fg="white").pack(pady=10)
 
-        name_entry = tk.Entry(self.frame)
-        pin_entry = tk.Entry(self.frame, show="*")
+        name_entry = tk.Entry(self.root)
+        email_entry = tk.Entry(self.root)
+        phone_entry = tk.Entry(self.root)
+        pass_entry = tk.Entry(self.root, show="*")
 
-        tk.Label(self.frame, text="Name", fg="white", bg="#2c3e50").pack()
-        name_entry.pack()
-        tk.Label(self.frame, text="PIN (4 digits)", fg="white", bg="#2c3e50").pack()
-        pin_entry.pack()
+        for label, entry in [("Name", name_entry), ("Email", email_entry), ("Phone", phone_entry), ("Password", pass_entry)]:
+            tk.Label(self.root, text=label, bg=self.colors["register"], fg="white").pack()
+            entry.pack()
 
         def register():
             name = name_entry.get()
-            pin = pin_entry.get()
-            if name and pin.isdigit() and len(pin) == 4:
-                c.execute("INSERT INTO users (name, pin) VALUES (?, ?)", (name, pin))
+            email = email_entry.get()
+            phone = phone_entry.get()
+            password = pass_entry.get()
+            if name and email and phone and password:
+                c.execute("INSERT INTO Users (name, email, phone, password) VALUES (%s, %s, %s, %s)",
+                          (name, email, phone, password))
                 conn.commit()
                 user_id = c.lastrowid
-                messagebox.showinfo("Success", f"Account created!\nYour User ID is: {user_id}")
-                self.main_menu()
+                c.execute("INSERT INTO Accounts (user_id, account_type, balance) VALUES (%s, %s, %s)",
+                          (user_id, "Savings", 0.0))
+                conn.commit()
+                messagebox.showinfo("Success", f"Account created. User ID: {user_id}")
+                self.admin_dashboard() if return_to_admin else self.main_menu()
             else:
-                messagebox.showerror("Error", "Invalid name or PIN")
+                messagebox.showerror("Error", "Please fill all fields.")
 
-        tk.Button(self.frame, text="Register", command=register, bg="white", fg="#2c3e50").pack(pady=10)
-        tk.Button(self.frame, text="Back", command=self.main_menu, bg="white", fg="#2c3e50").pack()
+        tk.Button(self.root, text="Submit", command=register).pack(pady=10)
+        tk.Button(self.root, text="Back", command=self.admin_dashboard if return_to_admin else self.main_menu).pack()
 
     def user_login(self):
-        self.clear_frame()
-        tk.Label(self.frame, text="User Login", font=("Arial", 18), fg="white", bg="#2c3e50").pack(pady=10)
+        self.clear_frame(self.colors["user_login"])
+        tk.Label(self.root, text="User Login", font=("Arial", 18), bg=self.colors["user_login"], fg="white").pack(pady=10)
 
-        id_entry = tk.Entry(self.frame)
-        pin_entry = tk.Entry(self.frame, show="*")
+        uid_entry = tk.Entry(self.root)
+        pass_entry = tk.Entry(self.root, show="*")
 
-        tk.Label(self.frame, text="User ID", fg="white", bg="#2c3e50").pack()
-        id_entry.pack()
-        tk.Label(self.frame, text="PIN", fg="white", bg="#2c3e50").pack()
-        pin_entry.pack()
+        tk.Label(self.root, text="User ID", bg=self.colors["user_login"], fg="white").pack()
+        uid_entry.pack()
+        tk.Label(self.root, text="Password", bg=self.colors["user_login"], fg="white").pack()
+        pass_entry.pack()
 
         def login():
-            uid = id_entry.get()
-            pin = pin_entry.get()
-            c.execute("SELECT * FROM users WHERE user_id=? AND pin=?", (uid, pin))
+            uid = uid_entry.get()
+            pwd = pass_entry.get()
+            c.execute("SELECT * FROM Users WHERE user_id=%s AND password=%s", (uid, pwd))
             user = c.fetchone()
             if user:
-                self.current_user_id = user[0]
+                self.current_user_id = int(uid)
                 self.user_dashboard()
             else:
                 messagebox.showerror("Error", "Invalid credentials")
 
-        tk.Button(self.frame, text="Login", command=login, bg="white", fg="#2c3e50").pack(pady=10)
-        tk.Button(self.frame, text="Back", command=self.main_menu, bg="white", fg="#2c3e50").pack()
+        tk.Button(self.root, text="Login", command=login).pack(pady=10)
+        tk.Button(self.root, text="Back", command=self.main_menu).pack()
 
     def user_dashboard(self):
-        self.clear_frame()
-        tk.Label(self.frame, text="User Dashboard", font=("Arial", 18), fg="white", bg="#2c3e50").pack(pady=10)
-        tk.Button(self.frame, text="View Balance", command=self.view_balance, bg="white", fg="#2c3e50", width=20).pack(pady=5)
-        tk.Button(self.frame, text="Deposit Money", command=self.deposit_money, bg="white", fg="#2c3e50", width=20).pack(pady=5)
-        tk.Button(self.frame, text="Withdraw Money", command=self.withdraw_money, bg="white", fg="#2c3e50", width=20).pack(pady=5)
-        tk.Button(self.frame, text="Logout", command=self.main_menu, bg="white", fg="#2c3e50", width=20).pack(pady=10)
+        self.clear_frame(self.colors["user_dashboard"])
+        tk.Label(self.root, text="User Dashboard", font=("Arial", 18), bg=self.colors["user_dashboard"], fg="white").pack(pady=10)
+        tk.Button(self.root, text="View Balance", command=self.view_balance, width=20).pack(pady=5)
+        tk.Button(self.root, text="Deposit Money", command=self.deposit, width=20).pack(pady=5)
+        tk.Button(self.root, text="Withdraw Money", command=self.withdraw, width=20).pack(pady=5)
+        tk.Button(self.root, text="Logout", command=self.main_menu, width=20).pack(pady=10)
 
     def view_balance(self):
-        c.execute("SELECT balance FROM users WHERE user_id=?", (self.current_user_id,))
+        c.execute("SELECT balance FROM Accounts WHERE user_id=%s", (self.current_user_id,))
         balance = c.fetchone()[0]
-        messagebox.showinfo("Balance", f"Your balance is ₹{balance:.2f}")
+        messagebox.showinfo("Balance", f"Your current balance is ₹{balance:.2f}")
 
-    def deposit_money(self):
-        amount = simpledialog.askfloat("Deposit", "Enter amount to deposit:")
-        if amount is None:
-            return
-        if amount <= 0:
-            messagebox.showerror("Error", "Enter a positive amount")
-            return
-        c.execute("UPDATE users SET balance = balance + ? WHERE user_id=?", (amount, self.current_user_id))
-        c.execute("INSERT INTO transactions (user_id, date, amount, type) VALUES (?, ?, ?, ?)",
-                  (self.current_user_id, datetime.now(), amount, "deposit"))
-        conn.commit()
-        messagebox.showinfo("Success", "Deposit successful")
+    def deposit(self):
+        amt = simpledialog.askfloat("Deposit", "Enter amount to deposit:")
+        if amt and amt > 0:
+            c.execute("UPDATE Accounts SET balance = balance + %s WHERE user_id=%s", (amt, self.current_user_id))
+            c.execute("INSERT INTO Transactions (account_id, transaction_type, amount, description) VALUES ((SELECT account_id FROM Accounts WHERE user_id=%s), 'Deposit', %s, %s)",
+                      (self.current_user_id, amt, "Deposit by user"))
+            conn.commit()
+            messagebox.showinfo("Success", "Amount deposited successfully.")
 
-    def withdraw_money(self):
-        amount = simpledialog.askfloat("Withdraw", "Enter amount to withdraw:")
-        if amount is None:
-            return
-        if amount <= 0:
-            messagebox.showerror("Error", "Enter a positive amount")
-            return
-        c.execute("SELECT balance FROM users WHERE user_id=?", (self.current_user_id,))
-        balance = c.fetchone()[0]
-        if amount > balance:
-            messagebox.showerror("Error", "Insufficient balance")
-            return
-        c.execute("UPDATE users SET balance = balance - ? WHERE user_id=?", (amount, self.current_user_id))
-        c.execute("INSERT INTO transactions (user_id, date, amount, type) VALUES (?, ?, ?, ?)",
-                  (self.current_user_id, datetime.now(), amount, "withdrawal"))
-        conn.commit()
-        messagebox.showinfo("Success", "Withdrawal successful")
+    def withdraw(self):
+        amt = simpledialog.askfloat("Withdraw", "Enter amount to withdraw:")
+        if amt and amt > 0:
+            c.execute("SELECT balance FROM Accounts WHERE user_id=%s", (self.current_user_id,))
+            balance = c.fetchone()[0]
+            if amt > balance:
+                messagebox.showerror("Error", "Insufficient balance.")
+                return
+            c.execute("UPDATE Accounts SET balance = balance - %s WHERE user_id=%s", (amt, self.current_user_id))
+            c.execute("INSERT INTO Transactions (account_id, transaction_type, amount, description) VALUES ((SELECT account_id FROM Accounts WHERE user_id=%s), 'Withdrawal', %s, %s)",
+                      (self.current_user_id, amt, "Withdrawal by user"))
+            conn.commit()
+            messagebox.showinfo("Success", "Amount withdrawn successfully.")
 
     def admin_login(self):
-        self.clear_frame()
-        tk.Label(self.frame, text="Admin Login", font=("Arial", 18), fg="white", bg="#2c3e50").pack(pady=10)
+        self.clear_frame(self.colors["admin_login"])
+        tk.Label(self.root, text="Admin Login", font=("Arial", 18), bg=self.colors["admin_login"], fg="white").pack(pady=10)
 
-        username = tk.Entry(self.frame)
-        password = tk.Entry(self.frame, show="*")
+        user_entry = tk.Entry(self.root)
+        pass_entry = tk.Entry(self.root, show="*")
 
-        tk.Label(self.frame, text="Username", fg="white", bg="#2c3e50").pack()
-        username.pack()
-        tk.Label(self.frame, text="Password", fg="white", bg="#2c3e50").pack()
-        password.pack()
+        tk.Label(self.root, text="Username", bg=self.colors["admin_login"], fg="white").pack()
+        user_entry.pack()
+        tk.Label(self.root, text="Password", bg=self.colors["admin_login"], fg="white").pack()
+        pass_entry.pack()
 
         def login():
-            c.execute("SELECT * FROM admins WHERE username=? AND password=?", (username.get(), password.get()))
+            c.execute("SELECT * FROM Admins WHERE username=%s AND password=%s",
+                      (user_entry.get(), pass_entry.get()))
             if c.fetchone():
                 self.admin_dashboard()
             else:
-                messagebox.showerror("Error", "Invalid credentials")
+                messagebox.showerror("Error", "Invalid admin credentials")
 
-        tk.Button(self.frame, text="Login", command=login, bg="white", fg="#2c3e50").pack(pady=10)
-        tk.Button(self.frame, text="Back", command=self.main_menu, bg="white", fg="#2c3e50").pack()
+        tk.Button(self.root, text="Login", command=login).pack(pady=10)
+        tk.Button(self.root, text="Back", command=self.main_menu).pack()
 
     def admin_dashboard(self):
-        self.clear_frame()
-        tk.Label(self.frame, text="Admin Dashboard", font=("Arial", 18), fg="white", bg="#2c3e50").pack(pady=10)
-        tk.Button(self.frame, text="View All Users", command=self.view_users, bg="white", fg="#2c3e50", width=20).pack(pady=5)
-        tk.Button(self.frame, text="View All Transactions", command=self.view_transactions, bg="white", fg="#2c3e50", width=20).pack(pady=5)
-        tk.Button(self.frame, text="Add User", command=self.add_user, bg="white", fg="#2c3e50", width=20).pack(pady=5)
-        tk.Button(self.frame, text="Remove User", command=self.remove_user, bg="white", fg="#2c3e50", width=20).pack(pady=5)
-        #tk.Button(self.frame, text="Back", command=self.main_menu, bg="white", fg="#2c3e50", width=20).pack(pady=10)
-        tk.Button(self.frame, text="Logout", command=self.main_menu, bg="white", fg="#2c3e50", width=20).pack(pady=10)
+        self.clear_frame(self.colors["admin_dashboard"])
+        tk.Label(self.root, text="Admin Dashboard", font=("Arial", 18), bg=self.colors["admin_dashboard"], fg="white").pack(pady=10)
+        tk.Button(self.root, text="View Users", command=self.view_users, width=20).pack(pady=5)
+        tk.Button(self.root, text="View Transactions", command=self.view_transactions, width=20).pack(pady=5)
+        tk.Button(self.root, text="Add User", command=lambda: self.register_user(return_to_admin=True), width=20).pack(pady=5)
+        tk.Button(self.root, text="Remove User", command=self.remove_user_prompt, width=20).pack(pady=5)
+        tk.Button(self.root, text="Logout", command=self.main_menu, width=20).pack(pady=10)
 
     def view_users(self):
-        c.execute("SELECT user_id, name, balance FROM users")
-        data = c.fetchall()
-        info = "\n".join([f"ID: {d[0]}, Name: {d[1]}, ₹{d[2]:.2f}" for d in data])
-        messagebox.showinfo("Users", info or "No users found.")
+        self.clear_frame(self.colors["admin_dashboard"])
+        tk.Label(self.root, text="Registered Users", font=("Arial", 16), bg=self.colors["admin_dashboard"], fg="white").pack(pady=10)
+        c.execute("SELECT user_id, name, email FROM Users")
+        users = c.fetchall()
+        for user in users:
+            user_frame = tk.Frame(self.root, bg=self.colors["admin_dashboard"])
+            user_frame.pack(pady=2)
+            tk.Label(user_frame, text=f"{user[0]} - {user[1]} ({user[2]})", bg=self.colors["admin_dashboard"], fg="white").pack(side=tk.LEFT)
+            tk.Button(user_frame, text="Delete", command=lambda uid=user[0]: self.remove_user(uid)).pack(side=tk.RIGHT)
+        tk.Button(self.root, text="Back", command=self.admin_dashboard).pack(pady=10)
+
+    def remove_user_prompt(self):
+        uid = simpledialog.askinteger("Remove User", "Enter User ID to remove:")
+        if uid:
+            self.remove_user(uid)
+
+    def remove_user(self, user_id):
+        confirm = messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete user ID {user_id}?")
+        if confirm:
+            c.execute("DELETE FROM Transactions WHERE account_id IN (SELECT account_id FROM Accounts WHERE user_id=%s)", (user_id,))
+            c.execute("DELETE FROM Accounts WHERE user_id=%s", (user_id,))
+            c.execute("DELETE FROM Users WHERE user_id=%s", (user_id,))
+            conn.commit()
+            messagebox.showinfo("Deleted", f"User ID {user_id} and related records have been deleted.")
+            self.view_users()
 
     def view_transactions(self):
-        c.execute("SELECT user_id, date, amount, type FROM transactions")
-        data = c.fetchall()
-        info = "\n".join([f"User {d[0]}: {d[3].capitalize()} ₹{d[2]:.2f} on {d[1]}" for d in data])
-        messagebox.showinfo("Transactions", info or "No transactions found.")
+        c.execute("SELECT account_id, transaction_type, amount, transaction_date FROM Transactions")
+        txns = c.fetchall()
+        info = "\n".join([f"{t[0]} | {t[1]} ₹{t[2]} on {t[3]}" for t in txns]) if txns else "No transactions available."
+        messagebox.showinfo("Transactions", info)
 
 
-    def add_user(self):
-        name = simpledialog.askstring("Add User", "Enter user name:")
-        pin = simpledialog.askstring("Add User", "Enter 4-digit PIN:")
-        if name and pin and pin.isdigit() and len(pin) == 4:
-            c.execute("INSERT INTO users (name, pin) VALUES (?, ?)", (name, pin))
-            conn.commit()
-            uid = c.lastrowid
-            messagebox.showinfo("Success", f"User added with ID: {uid}")
-        else:
-            messagebox.showerror("Error", "Invalid input")
-
-    def remove_user(self):
-        uid = simpledialog.askinteger("Remove User", "Enter User ID to remove:")
-        if uid is not None:
-            c.execute("DELETE FROM users WHERE user_id=?", (uid,))
-            conn.commit()
-            messagebox.showinfo("Success", f"User {uid} removed.")
-
-if _name_ == "_main_":
+if __name__ == "__main__":
     root = tk.Tk()
     app = BankingApp(root)
     root.mainloop()
